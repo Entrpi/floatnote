@@ -13,19 +13,45 @@ use window_controller::NoOpWindowController;
 
 #[tauri::command]
 fn resize_window<R: Runtime>(window: Window<R>, width: f64, height: f64) -> Result<(), String> {
-    window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }))
+    let scale_factor = window.scale_factor().map_err(|e| e.to_string())?;
+    
+    // Get Screen Dimensions
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .ok_or("No monitor found")?;
+    let screen_size = monitor.size().to_logical::<f64>(scale_factor);
+
+    // Calculate Max Dimensions (80% of Screen)
+    let max_w = screen_size.width * 0.8;
+    let max_h = screen_size.height * 0.8;
+
+    let mut target_w = width;
+    let mut target_h = height;
+
+    // Scale down if too big
+    if target_w > max_w || target_h > max_h {
+        let ratio_w = max_w / target_w;
+        let ratio_h = max_h / target_h;
+        let scale = f64::min(ratio_w, ratio_h);
+        
+        target_w *= scale;
+        target_h *= scale;
+    }
+
+    // Apply Size
+    window.set_size(tauri::Size::Logical(tauri::LogicalSize { width: target_w, height: target_h }))
         .map_err(|e| e.to_string())?;
 
+    // Apply Aspect Ratio Lock
     #[cfg(target_os = "macos")]
     {
         let controller = MacWindowController::new(window);
-        controller.set_aspect_ratio(width, height)?;
+        controller.set_aspect_ratio(target_w, target_h)?;
     }
 
     #[cfg(not(target_os = "macos"))]
     {
         let controller = NoOpWindowController;
-        <NoOpWindowController as WindowController<R>>::set_aspect_ratio(&controller, width, height)?;
+        <NoOpWindowController as WindowController<R>>::set_aspect_ratio(&controller, target_w, target_h)?;
     }
 
     Ok(())
@@ -40,8 +66,21 @@ fn zoom_window<R: Runtime>(window: Window<R>, factor: f64) -> Result<(), String>
     let new_width = size.width * factor;
     let new_height = size.height * factor;
 
+    // Minimum constraint (50px)
     if new_width < 50.0 || new_height < 50.0 {
         return Ok(());
+    }
+
+    // Maximum constraint (Screen Size)
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .ok_or("No monitor found")?;
+    let screen_size = monitor.size().to_logical::<f64>(scale_factor);
+
+    // If growing (factor > 1.0) and we exceed screen size, stop.
+    if factor > 1.0 {
+        if new_width > screen_size.width || new_height > screen_size.height {
+            return Ok(());
+        }
     }
 
     window.set_size(tauri::Size::Logical(tauri::LogicalSize {
