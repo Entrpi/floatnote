@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
+  import { invoke, convertFileSrc } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { onMount } from "svelte";
   import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -11,13 +11,10 @@
 
   const appWindow = getCurrentWindow();
 
-  // Hotkey Configuration State (Ready for Settings GUI binding)
-  // Format: { action: { keys: string[], meta: boolean } }
-  // meta: true requires Ctrl (Windows/Linux) or Cmd (macOS)
   let keybindings = $state({
       zoomIn: { keys: ["=", "+"], meta: false },
       zoomOut: { keys: ["-", "_"], meta: false },
-      toggleInteract: { keys: ["i"], meta: true }, // Ctrl+I / Cmd+I
+      toggleInteract: { keys: ["i"], meta: true },
   });
 
   let containerStyle = $derived(`width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: transparent; overflow: hidden; opacity: ${opacity}; position: relative;`);
@@ -29,35 +26,37 @@
     await listen("toggle_interaction", () => {
         isInteractive = !isInteractive;
     });
+
+    // Tauri File Drop Events
+    await listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
+        if (!isInteractive) return;
+        isDragging = false;
+        const path = event.payload.paths[0];
+        if (path) {
+            try {
+                // Rust analyzes dimensions and resizes window
+                await invoke("open_image", { path });
+                // Convert path to asset URL for display
+                currentImage = convertFileSrc(path);
+            } catch (e) {
+                console.error("Failed to open image:", e);
+            }
+        }
+    });
+
+    await listen("tauri://drag-enter", () => {
+        if (isInteractive) isDragging = true;
+    });
+
+    await listen("tauri://drag-leave", () => {
+        isDragging = false;
+    });
   });
 
-  async function handleDrop(event: DragEvent) {
-    if (!isInteractive) return;
-    event.preventDefault();
-    isDragging = false;
-
-    const file = event.dataTransfer?.files[0];
-    if (!file) return;
-
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = async () => {
-      const width = img.naturalWidth;
-      const height = img.naturalHeight;
-      await invoke("resize_window", { width, height });
-      currentImage = objectUrl;
-    };
-    img.src = objectUrl;
-  }
-
-  function handleDragOver(event: DragEvent) {
-    if (!isInteractive) return;
-    event.preventDefault();
-    isDragging = true;
-  }
-
-  function handleDragLeave() {
-    isDragging = false;
+  // Removed HTML ondrop/dragover for file logic, kept visual feedback logic via Tauri events
+  // But we can keep HTML handlers to prevent default browser behavior (opening file in viewport directly)
+  function preventDefault(event: DragEvent) {
+      event.preventDefault();
   }
 
   async function handleContextMenu(event: MouseEvent) {
@@ -75,14 +74,10 @@
     zoom(factor);
   }
 
-  // Helper to check key events against config
   function isMatch(event: KeyboardEvent, action: keyof typeof keybindings) {
       const config = keybindings[action];
       const keyMatch = config.keys.includes(event.key);
       const metaMatch = config.meta ? (event.ctrlKey || event.metaKey) : true;
-      // If meta is false, we don't enforce *lack* of meta, just don't require it.
-      // But typically for simple keys we might want to ignore if Ctrl is held? 
-      // For now, simple matching.
       return keyMatch && metaMatch;
   }
 
@@ -116,9 +111,8 @@
   class:dragging={isDragging}
   class:interactive={isInteractive}
   oncontextmenu={handleContextMenu}
-  ondrop={handleDrop}
-  ondragover={handleDragOver}
-  ondragleave={handleDragLeave}
+  ondrop={preventDefault}
+  ondragover={preventDefault}
   onwheel={handleWheel}
   data-tauri-drag-region={isInteractive ? "" : null}
 >
@@ -135,7 +129,6 @@
   {/if}
 
   {#if isInteractive}
-      <!-- Resize Handles -->
       <div class="resize-handle n" onmousedown={() => startResize('Top')}></div>
       <div class="resize-handle s" onmousedown={() => startResize('Bottom')}></div>
       <div class="resize-handle e" onmousedown={() => startResize('Right')}></div>
@@ -169,10 +162,10 @@
   }
 
   .interactive:hover .resize-handle {
-      opacity: 0.1; /* Faint hint */
+      opacity: 0.1;
   }
   .resize-handle:hover {
-      opacity: 0.6 !important; /* Clear interaction target */
+      opacity: 0.6 !important;
   }
 
   .n, .s { height: 10px; width: 100%; left: 0; cursor: ns-resize; }

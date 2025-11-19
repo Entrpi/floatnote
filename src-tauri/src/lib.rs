@@ -5,14 +5,15 @@ pub mod mac_window_controller;
 use tauri::{Runtime, Window, AppHandle, Emitter, Manager};
 use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder, CheckMenuItemBuilder};
 use window_controller::WindowController;
+use image::io::Reader as ImageReader;
 
 #[cfg(target_os = "macos")]
 use mac_window_controller::MacWindowController;
 #[cfg(not(target_os = "macos"))]
 use window_controller::NoOpWindowController;
 
-#[tauri::command]
-fn resize_window<R: Runtime>(window: Window<R>, width: f64, height: f64) -> Result<(), String> {
+// Helper to share resize logic between commands
+fn do_resize_window<R: Runtime>(window: &Window<R>, width: f64, height: f64) -> Result<(), String> {
     let scale_factor = window.scale_factor().map_err(|e| e.to_string())?;
     
     // Get Screen Dimensions
@@ -44,7 +45,7 @@ fn resize_window<R: Runtime>(window: Window<R>, width: f64, height: f64) -> Resu
     // Apply Aspect Ratio Lock
     #[cfg(target_os = "macos")]
     {
-        let controller = MacWindowController::new(window);
+        let controller = MacWindowController::new(window.clone());
         controller.set_aspect_ratio(target_w, target_h)?;
     }
 
@@ -55,6 +56,27 @@ fn resize_window<R: Runtime>(window: Window<R>, width: f64, height: f64) -> Resu
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn resize_window<R: Runtime>(window: Window<R>, width: f64, height: f64) -> Result<(), String> {
+    do_resize_window(&window, width, height)
+}
+
+#[tauri::command]
+fn open_image<R: Runtime>(_app: AppHandle<R>, window: Window<R>, path: String) -> Result<String, String> {
+    // 1. Analyze Image Header (Fast - no full load)
+    // We use image::io::Reader to peek at dimensions without decoding pixels.
+    let reader = ImageReader::open(&path).map_err(|e| e.to_string())?
+        .with_guessed_format().map_err(|e| e.to_string())?;
+    
+    let (width, height) = reader.into_dimensions().map_err(|e| e.to_string())?;
+
+    // 2. Resize Window (using shared logic)
+    do_resize_window(&window, width as f64, height as f64)?;
+
+    // 3. Return path (Frontend will convert to asset URL)
+    Ok(path)
 }
 
 #[tauri::command]
@@ -127,9 +149,10 @@ fn show_context_menu<R: Runtime>(app: AppHandle<R>, window: Window<R>, is_intera
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![resize_window, zoom_window, show_context_menu])
+        .invoke_handler(tauri::generate_handler![resize_window, open_image, zoom_window, show_context_menu])
         .on_menu_event(|app, event| {
             let id = event.id();
+            // We assume the main window is what we control.
             if let Some(window) = app.get_webview_window("main") {
                 if id == "close" {
                     app.exit(0);

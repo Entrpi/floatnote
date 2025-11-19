@@ -8,6 +8,7 @@ Built with Tauri v2 + Svelte + TypeScript + Rust.
 - **Frameless UI**: The window is the image.
 - **Always on Top**: Floats above other windows by default (Toggle via Context Menu).
 - **Smart Resizing**: Automatically resizes the window to fit the dropped image (Max 80% of screen size).
+- **Optimized Loading**: Uses Rust for instant file analysis, handling 4K/8K images efficiently.
 - **Interactive Mode**:
     - Toggle with `Ctrl+I` (or `Cmd+I`) or via Context Menu.
     - **On**: Drag window, Resize edges, Zoom, Load images.
