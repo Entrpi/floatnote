@@ -53,7 +53,7 @@ fn zoom_window<R: Runtime>(window: Window<R>, factor: f64) -> Result<(), String>
 }
 
 #[tauri::command]
-fn show_context_menu<R: Runtime>(app: AppHandle<R>, window: Window<R>) -> Result<(), String> {
+fn show_context_menu<R: Runtime>(app: AppHandle<R>, window: Window<R>, is_interactive: bool) -> Result<(), String> {
     let opacity_100 = MenuItemBuilder::new("100%").id("opacity_1.0").build(&app).map_err(|e| e.to_string())?;
     let opacity_75 = MenuItemBuilder::new("75%").id("opacity_0.75").build(&app).map_err(|e| e.to_string())?;
     let opacity_50 = MenuItemBuilder::new("50%").id("opacity_0.5").build(&app).map_err(|e| e.to_string())?;
@@ -69,10 +69,15 @@ fn show_context_menu<R: Runtime>(app: AppHandle<R>, window: Window<R>) -> Result
         .checked(is_pinned)
         .build(&app).map_err(|e| e.to_string())?;
 
+    let interactive_item = CheckMenuItemBuilder::new("Interactive")
+        .id("toggle_interaction")
+        .checked(is_interactive)
+        .build(&app).map_err(|e| e.to_string())?;
+
     let close_item = MenuItemBuilder::new("Close").id("close").build(&app).map_err(|e| e.to_string())?;
 
     let menu = MenuBuilder::new(&app)
-        .items(&[&pin_item, &opacity_menu, &close_item])
+        .items(&[&interactive_item, &pin_item, &opacity_menu, &close_item])
         .build().map_err(|e| e.to_string())?;
 
     window.popup_menu(&menu).map_err(|e| e.to_string())?;
@@ -86,13 +91,14 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![resize_window, zoom_window, show_context_menu])
         .on_menu_event(|app, event| {
             let id = event.id();
-            // We assume the main window is what we control.
             if let Some(window) = app.get_webview_window("main") {
                 if id == "close" {
                     app.exit(0);
                 } else if id == "pin_toggle" {
                      let current = window.is_always_on_top().unwrap_or(false);
                      let _ = window.set_always_on_top(!current);
+                } else if id == "toggle_interaction" {
+                     let _ = window.emit("toggle_interaction", ());
                 } else if id.as_ref().starts_with("opacity_") {
                     if let Ok(val) = id.as_ref().trim_start_matches("opacity_").parse::<f64>() {
                         let _ = window.emit("set_opacity", val);

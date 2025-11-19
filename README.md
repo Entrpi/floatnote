@@ -8,10 +8,15 @@ Built with Tauri v2 + Svelte + TypeScript + Rust.
 - **Frameless UI**: The window is the image.
 - **Always on Top**: Floats above other windows by default (Toggle via Context Menu).
 - **Smart Resizing**: Automatically resizes the window to fit the dropped image.
+- **Interactive Mode**:
+    - Toggle with `Ctrl+I` (or `Cmd+I`) or via Context Menu.
+    - **On**: Drag window, Resize edges, Zoom, Load images.
+    - **Off**: Click-through (conceptually), locked from accidental changes.
 - **Zooming**:
     - Scroll Mouse Wheel to Zoom In/Out.
     - Use `+` / `-` keys to Zoom.
 - **Context Menu**: Right-click to access:
+    - **Interactive**: Toggle interactive mode.
     - **Opacity**: Adjust transparency (25% - 100%).
     - **Always on Top**: Toggle pinning.
     - **Close**: Quit the app.
