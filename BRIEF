@@ -1,0 +1,53 @@
+PinFrame" Clone  Phase 1 (macOS)
+Objective: Build a high-performance, frameless image pinning tool for macOS.
+Core Utility: An "Always on Top" reference viewer where the window itself resizes to fit the image.
+Target Stack: Tauri v2 + Svelte.
+
+1. The Tech Stack
+Framework: Tauri v2 (Rust + Web tech).[2]
+Why: Native performance, tiny file size (<10MB), and cross-platform ready.[1]
+Frontend: Svelte + TypeScript.
+Why: It handles high-speed window resizing without the "virtual DOM jitter" of React. It is lighter on memory, which is critical for a background utility.
+Backend: Rust.[2]
+Role: Handles file I/O, OS window management, and image dimension analysis.
+2. Core Features (Phase 1 Scope)
+
+A. Smart "Open" Behavior
+When the user opens an image (Drag & Drop or File Picker):
+
+Analysis: Rust reads pixel dimensions (
+) from the file header.
+Logic:
+Fits Screen: Resize the OS window to exactly 
+.
+Too Big: Scale dimensions down to fit the screen (e.g., max 80% of screen width) while maintaining aspect ratio.
+Action: The window snaps to this size before becoming visible.
+B. Aspect Ratio Locking (macOS Native)
+Requirement: The window must strictly maintain the image's proportions when resized by the user.
+Implementation: Use the cocoa crate in Rust to access the underlying NSWindow and apply setContentAspectRatio.
+Behavior: Dragging a corner forces the height to follow the width based on the image ratio.
+C. Zoom = Resize[1][3]
+Zooming: Pressing + / - or using the scroll wheel must resize the OS Window Frame, not just the image inside.
+Constraint: The window stops growing if it hits the screen edge.
+D. UI & UX
+Frameless: No title bar. The image is the window.[2][4]
+Floating: Defaults to Always On Top.
+Interactivity:
+Left Click Drag: Moves the window.
+Right Click: Opens a native context menu (Opacity, Close, Pin Toggle).[1]
+3. Architecture for Future Porting (Windows/Linux)
+Since we plan to support Windows/Linux and PDF/Web types later, strict architectural rules apply:
+
+Isolate Native Logic:
+Do not scatter macOS specific code (like NSWindow calls) throughout the app.
+Requirement: Create a Rust Trait (interface) called WindowController.
+Implement MacWindowController now. This makes it trivial to add WinWindowController later without breaking the app.
+The "Linux Plan" (Letterboxing):
+Note to Developer: Do not over-engineer aspect ratio locking for the future Linux version. Linux (Wayland) often ignores window constraints.
+Requirement: The Frontend (Svelte) must support "Internal Letterboxing" (centering the image if the window aspect ratio doesn't match the content). This will be our fallback method for platforms that refuse to lock the window shape.
+Content Type Agnosticism:
+The frontend should have a "Viewer Container" that currently only loads an ImageViewer component but is structured to accept PdfViewer or WebFrame components in the future.
+4. Deliverables
+Repo: GitHub repository with clear setup instructions.
+Build: A signed/unsigned .app or .dmg for macOS Silicon.
+Code Standard: All platform-specific code must be guarded with #[cfg(target_os = "macos")].
