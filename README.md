@@ -6,8 +6,15 @@ Built with Tauri v2 + Svelte + TypeScript + Rust.
 ## Features
 
 - **Frameless UI**: The window is the image.
-- **Always on Top**: Floats above other windows by default.
+- **Always on Top**: Floats above other windows by default (Toggle via Context Menu).
 - **Smart Resizing**: Automatically resizes the window to fit the dropped image.
+- **Zooming**:
+    - Scroll Mouse Wheel to Zoom In/Out.
+    - Use `+` / `-` keys to Zoom.
+- **Context Menu**: Right-click to access:
+    - **Opacity**: Adjust transparency (25% - 100%).
+    - **Always on Top**: Toggle pinning.
+    - **Close**: Quit the app.
 - **Cross-Platform Architecture**: Designed with a `WindowController` trait to handle platform-specific window constraints (e.g., aspect ratio locking on macOS).
 
 ## Prerequisites
@@ -19,7 +26,6 @@ Built with Tauri v2 + Svelte + TypeScript + Rust.
 ### Linux
 You need to install system dependencies for Tauri:
 ```bash
-sudo apt-get update
 sudo apt-get install libwebkit2gtk-4.1-dev \
     build-essential \
     curl \
